@@ -32,7 +32,8 @@ void loop() {
   int x_cm = readRadarX();       // returns cm from top radar
 
   if (x_cm >= 0) {
-    int ledIndex = map(x_cm, 0, stairLengthCM, NUM_LEDS - 1, 0);
+    int ledIndex = map(x_cm, 0, (int)stairLengthCM, NUM_LEDS - 1, 0);
+    ledIndex = constrain(ledIndex, 0, NUM_LEDS - 1);
     // note: reversed because 0cm = top, but LED#0 = bottom
 
     drawBlock(ledIndex);
@@ -51,6 +52,28 @@ int readRadarX() {
 
   while (Radar.available()) {
     uint8_t b = Radar.read();
+    if (idx == 0) {
+      // Wait for start byte
+      if (b != 0x55)
+        continue;
+
+      buf[idx++] = b;
+      continue;
+    }
+
+    if (idx == 1) {
+      // Validate second header byte, otherwise restart search
+      if (b != 0xCC) {
+        idx = (b == 0x55) ? 1 : 0;
+        if (idx == 1)
+          buf[0] = 0x55;
+        continue;
+      }
+
+      buf[idx++] = b;
+      continue;
+    }
+
     buf[idx++] = b;
 
     if (idx == 45) {
@@ -59,7 +82,7 @@ int readRadarX() {
       // bytes 9-10 = X position (int16, little endian)
       int16_t x = buf[9] | (buf[10] << 8);
 
-      if (x >= 0 && x <= 600)  // basic sanity filter
+      if (x >= 0 && x <= (int)stairLengthCM)  // basic sanity filter
         return x;
     }
   }
